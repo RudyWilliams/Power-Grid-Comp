@@ -130,7 +130,34 @@ def fill_weather_forecast_columns(df):
 
     return filled_df
 
+def fill_test_weather_forecast_columns(df):
+    """
+        these fill functions are very specific to the data at hand. Hope to make more
+        general to deal with missing data (in chunks of days) without user direction.
 
+        Args:
+            df: pd.DataFrame - the dataframe that needs filling
+        
+        Returns:
+            filled_df: pd.DataFrame - the dataframe that has the nan's filled
+    """
+
+    filled_df = df.copy()
+    filled_df.loc['2018-02-22','temp_KC':'wind_north_SD'] = filled_df.loc['2018-02-21','temp_KC':'wind_north_SD'].values
+    filled_df.loc['2018-02-23','temp_KC':'wind_north_SD'] = filled_df.loc['2018-02-24','temp_KC':'wind_north_SD'].values
+    # print(filled_df.loc['2018-02-21':'2018-02-24'])
+    filled_df = filled_df.fillna(method='ffill', limit=1)
+    # print(filled_df.isna().sum(axis=0))
+    filled_df = filled_df.fillna(method='bfill', limit=1)
+    # print(filled_df.isna().sum(axis=0))
+    filled_df = filled_df.fillna(method='ffill', limit=1)
+
+    any_nans = filled_df.isna().sum(axis=0)
+    
+    if any_nans.sum(axis=0) != 0:
+        print('The function did not convert all NaNs. Some NaNs still exist.')
+
+    return filled_df
         
 if __name__ == '__main__':
 

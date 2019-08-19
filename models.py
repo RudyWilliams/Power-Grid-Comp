@@ -143,9 +143,9 @@ def train_random_forest_regression(X_data, y_data, split=False, train_pct=None, 
                                     min_samples_leaf=min_samples_node,
                                     random_state=rand_state, oob_score=True)
         rfr.fit(X_data, y_data)
-        y_oob_pred = rfr.oob_prediction_
-        oob_mse = ((y_data - y_oob_pred)**2).mean() #should maintain order
-        oob_rmse = sqrt(oob_mse)
+        y_oob_pred = rfr.oob_prediction_  #should maintain order
+        oob_mse = mean_squared_error(y_data, y_oob_pred, multioutput='raw_values') #use all of y_data (no splitting)
+        oob_rmse = np.sqrt(oob_mse)
 
         return rfr, oob_mse, oob_rmse
 
@@ -153,35 +153,22 @@ def train_random_forest_regression(X_data, y_data, split=False, train_pct=None, 
 
 if __name__ == '__main__':
 
+    from submit_model import upload_response
 
-    ## perform Linear Regression without the weather data
-    #=========================================================
-    # X, y = dp.read_training(index_columns=['date'], both=True)
+    ### Read training data without weather data
+    #+++++++++++++++++++++++++++++++++++++++++++
+    X, y = dp.read_training(index_columns=['date'], both=True)
 
-    # X_feed = dp.ffill_nans(X)
-    # y_feed = y.loc[:,['target1','target2']].values
+    X_feed = dp.ffill_nans(X)
+    y_feed = y.loc[:,['target1','target2']].values
     
-    # model, mse, rmse = train_linear_regression(
-    #     X_feed,
-    #     y_feed,
-    #     split=True,
-    #     train_pct=0.8, 
-    #     rand_state=5
-    #     )
-    
-    # print(f'Linear Regression RMSE: {rmse}')
+    ### Read test data without weather data
+    #+++++++++++++++++++++++++++++++++++++++++
+    X_test = dp.read_test_X(index_columns=['date'])
+    X_test = dp.ffill_nans(X_test)
 
-    ### submit linear regression model
-    #----------------------------------------
-    # linear_regression = train_linear_regression(X_feed, y_feed, split=False)
-    # X_test = dp.read_test_X(index_columns=['date'])
-    # linear_regression.fit(X_feed, y_feed)
-    # turn_in_pred = linear_regression.predict(dp.ffill_nans(X_test))
-
-    # from submit_model import upload_response
-    # upload_response('RW-LinearRegression', turn_in_pred)
-
-    ## perform Linear Regression with the weather data
+    ### Read training data with weather data
+    #+++++++++++++++++++++++++++++++++++++++++
     X_weather, y_weather = dp.read_training(
         both=True, 
         weather=True, 
@@ -191,6 +178,34 @@ if __name__ == '__main__':
     X_weather = dp.fill_weather_forecast_columns(X_weather)
     y_weather = y_weather.loc[:,['target1','target2']].values
     
+    ### Read test data with weather data
+    #+++++++++++++++++++++++++++++++++++++++
+    X_test_weather = dp.read_test_X(index_columns=['date'], weather=True)
+    X_test_weather = dp.fill_test_weather_forecast_columns(X_test_weather)
+    
+    ######################################################
+
+    ## perform linear regression without weather data
+    #================================================
+    model, mse, rmse = train_linear_regression(
+        X_feed,
+        y_feed,
+        split=True,
+        train_pct=0.8, 
+        rand_state=5
+        )
+    
+    print(f'Linear Regression RMSE: {rmse}')
+
+    ## submit linear regression model
+    #----------------------------------------
+    linear_regression = train_linear_regression(X_feed, y_feed, split=False)
+    turn_in_pred = linear_regression.predict(X_test)
+    print(f'  -> Shape of submission array: {turn_in_pred.shape}')
+    # upload_response('RW-LinearRegression', turn_in_pred)
+
+    ## perform Linear Regression with the weather data
+    #==================================================
     lr_modelW, mseW, rmseW = train_linear_regression(
         X_weather,
         y_weather,
@@ -200,31 +215,40 @@ if __name__ == '__main__':
         )
 
     print(f'Linear Regression w/ Weather Data RMSE: {rmseW}')    
-    
-    # perform Random Forest Regression w/ Weather Data
-    # rfr_results = train_random_forest_regression(
-    #     X_data=X_weather,
-    #     y_data=y_weather,
-    #     ntrees=800,
-    #     split=True,
-    #     train_pct=0.8,
-    #     rand_state=5
-    # )
 
-    # print(f'Random Forest Regressor w/ Weather Data RMSE: {rfr_results[2]}')
+    ## submit linear regression w/ weather data
+    #--------------------------------------------
+    trained_lr_weather = train_linear_regression(X_weather, y_weather)
+    lrW_pred_turn_in = trained_lr_weather.predict(X_test_weather)
+    print(f'  -> Shape of sumbission array: {lrW_pred_turn_in.shape}')
+    # upload_response('RW-LinRegWithWeather', lrW_pred_turn_in)
+    #Rank 1 as of 8/19/2019 @2:10pm
 
-    ### submit random forest regressor model
-    #----------------------------------------
-    X_test = dp.read_test_X(index_columns=['date'], weather=True)
-    print(X_test.loc['2018-01-15':'2018-01-16', :])
-    X_test = X_test.fillna(method='ffill', limit=1)
-    print(X_test.loc['2018-01-15':'2018-01-16',:])
-    X_test = X_test.fillna(method='bfill',limit=1)
-    print(X_test.loc[X_test.isna().any(axis=1),:])
-    print(X_test.loc['2018-02-21':'2018-02-22'])
 
-    # from submit_model import upload_response
-    # upload_response('RW-LinearRegression_with_weather', turn_in_pred)
+    ## perform Random Forest Regression w/ Weather Data
+    #===================================================
+    rfr_results = train_random_forest_regression(
+        X_data=X_weather,
+        y_data=y_weather,
+        ntrees=800,
+        split=True,
+        train_pct=0.8,
+        rand_state=5
+    )
+    print(f'Random Forest Regressor w/ Weather Data RMSE: {rfr_results[2]}')
+
+    ### submit random forest regressor model w/ weather data
+    #--------------------------------------------------------
+    trained_rfr, _, oob_rmse = train_random_forest_regression(
+        X_weather,
+        y_weather,
+        ntrees=800,
+        rand_state=5
+    )
+    print(f'Out-of-Observation RMSE: {oob_rmse}')
+    rfr_pred_turn_in = trained_rfr.predict(X_test_weather)
+    print(f'  -> Shape of submission array: {rfr_pred_turn_in.shape}')
+
     ## perform Lasso Regression with the weather data
     # split_results = train_lasso_regression(
     #     X_weather,
