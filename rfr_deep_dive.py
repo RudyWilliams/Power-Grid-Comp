@@ -25,7 +25,9 @@ def run_CV(model, nfold, X, y, rand_state=None, output_type='raw_values', **kwar
     kfold = KFold(n_splits=nfold, shuffle=False, random_state=rand_state)
     for i, index_tuple in enumerate(kfold.split(X)):
         train_index = index_tuple[0]
+        # print(train_index)
         test_index = index_tuple[1]
+        # print(test_index)
         X_train = X.iloc[train_index,:]
         y_train = y[train_index,:]
         X_test = X.iloc[test_index,:]
@@ -40,6 +42,39 @@ def run_CV(model, nfold, X, y, rand_state=None, output_type='raw_values', **kwar
 
     return rmses.mean(axis=0)
 
+@td.runtime_timer
+def run_rfr_CV(ntrees=1, m='sqrt', rand_state=None, output_type='raw_values'):
+    """
+        Run through a round of CV to get a CV error for the specified
+        number of trees (ntrees)
+    """
+    rmses = np.empty(shape=(5,2))
+
+    #5-Fold CV indicies
+    kfold_5 = KFold(n_splits=5, shuffle=False, random_state=rand_state)
+    for i, index_tuple in enumerate(kfold_5.split(models.X_weather)):
+        train_index = index_tuple[0]
+        # print(train_index)
+        test_index = index_tuple[1]
+        # print(test_index)
+        X_train = models.X_weather.iloc[train_index,:]
+        y_train = models.y_weather[train_index,:]
+        X_test = models.X_weather.iloc[test_index,:]
+        y_test = models.y_weather[test_index,:]
+        
+        rfr = RandomForestRegressor(
+            n_estimators=ntrees,
+            max_features=m,
+            min_samples_leaf=1,
+            random_state=rand_state
+        )
+        rfr.fit(X_train, y_train)
+        fold_pred = rfr.predict(X_test)
+        fold_mse = mean_squared_error(y_test, fold_pred, multioutput=output_type)
+        fold_rmse = np.sqrt(fold_mse)
+        rmses[i] = fold_rmse
+
+    return rmses.mean(axis=0)
 #good candidate for dask
 @dask.delayed
 def delayed_fit_eval(model, X_train, y_train, X_test, y_test):
@@ -112,7 +147,18 @@ if __name__ == '__main__':
         models.X_weather, 
         models.y_weather,
         rand_state=42,
-        n_estimators=100
+        n_estimators=1,
+        max_features='sqrt', #was forgetting to set which caused longer runtime and bagging
+        min_samples_leaf=1,
+
+    ))
+    print(run_rfr_CV(
+        ntrees=1,
+        rand_state=42
+    ))
+    print(run_rfr_CV(
+        ntrees=1,
+        rand_state=42
     ))
     pass
 
