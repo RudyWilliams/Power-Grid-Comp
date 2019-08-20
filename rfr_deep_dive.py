@@ -14,7 +14,7 @@ ntree_array = np.arange(0,801,100)
 ntree_array[0] = 1 #i.e. Regression Tree
 
 @td.runtime_timer
-def run_CV(ntrees=1, m='sqrt', rand_state=None, output_type='raw_values'):
+def run_CV(model, nfold, X, y, rand_state=None, output_type='raw_values', **kwargs):
     """
         Run through a round of CV to get a CV error for the specified
         number of trees (ntrees)
@@ -22,24 +22,18 @@ def run_CV(ntrees=1, m='sqrt', rand_state=None, output_type='raw_values'):
     rmses = np.empty(shape=(5,2))
 
     #5-Fold CV indicies
-    kfold_5 = KFold(n_splits=5, shuffle=False, random_state=rand_state)
-    for i, index_tuple in enumerate(kfold_5.split(models.X_weather)):
+    kfold = KFold(n_splits=nfold, shuffle=False, random_state=rand_state)
+    for i, index_tuple in enumerate(kfold.split(X)):
         train_index = index_tuple[0]
         test_index = index_tuple[1]
-        X_train = models.X_weather.iloc[train_index,:]
-        y_train = models.y_weather[train_index,:]
-        X_test = models.X_weather.iloc[test_index,:]
-        y_test = models.y_weather[test_index,:]
+        X_train = X.iloc[train_index,:]
+        y_train = y[train_index,:]
+        X_test = X.iloc[test_index,:]
+        y_test = y[test_index,:]
         
-        rfr = RandomForestRegressor(
-            n_estimators=ntrees,
-            max_features=m,
-            min_samples_leaf=1,
-            oob_score=False,
-            random_state=rand_state
-        )
-        rfr.fit(X_train, y_train)
-        fold_pred = rfr.predict(X_test)
+        instan_model = model(random_state=rand_state, **kwargs)
+        instan_model.fit(X_train, y_train)
+        fold_pred = instan_model.predict(X_test)
         fold_mse = mean_squared_error(y_test, fold_pred, multioutput=output_type)
         fold_rmse = np.sqrt(fold_mse)
         rmses[i] = fold_rmse
@@ -109,9 +103,16 @@ def run_parallel_CV(ntrees=1, m='sqrt', rand_state=None, output_type='raw_values
 
 if __name__ == '__main__':
 
-    print(run_parallel_CV(ntrees=500, m='sqrt', rand_state=42, output_type='raw_values'))
+    # print(run_parallel_CV(ntrees=500, m='sqrt', rand_state=42, output_type='raw_values'))
     # ntrees_cv_errors = [run_CV(ntrees=n, m='sqrt',rand_state=42) for n in ntree_array]
     # print(ntrees_cv_errors)
-    print(run_CV(ntrees=500, rand_state=42))
+    print(run_CV(
+        RandomForestRegressor,
+        5, 
+        models.X_weather, 
+        models.y_weather,
+        rand_state=42,
+        n_estimators=100
+    ))
     pass
 
